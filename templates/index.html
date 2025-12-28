@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trip Planner</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/@mapbox/polyline@1.2.1/src/polyline.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-dark: #1a1a2e;
+            --bg-card: #16213e;
+            --accent: #e94560;
+            --accent-hover: #ff6b6b;
+            --text: #edf2f7;
+            --text-muted: #a0aec0;
+            --success: #48bb78;
+            --border: #2d3748;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--bg-card) 0%, #0f3460 100%);
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            background: linear-gradient(90deg, var(--text), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .input-group label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        input[type="text"] {
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-dark);
+            color: var(--text);
+            font-size: 1rem;
+            width: 220px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.2);
+        }
+
+        button {
+            padding: 0.75rem 2rem;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+            align-self: flex-end;
+        }
+
+        button:hover {
+            background: var(--accent-hover);
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .main-content {
+            display: flex;
+            height: calc(100vh - 140px);
+        }
+
+        #map {
+            flex: 1;
+            min-height: 400px;
+        }
+
+        .sidebar {
+            width: 380px;
+            background: var(--bg-card);
+            border-left: 1px solid var(--border);
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+
+        .error-message {
+            background: rgba(233, 69, 96, 0.15);
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            color: var(--accent-hover);
+        }
+
+        .summary {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            padding: 1rem;
+            border: 1px solid var(--border);
+        }
+
+        .stat-card .label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-card .value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .stat-card .value.accent {
+            color: var(--success);
+        }
+
+        .stops-header {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .stop-card {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            border: 1px solid var(--border);
+            transition: border-color 0.2s;
+        }
+
+        .stop-card:hover {
+            border-color: var(--accent);
+        }
+
+        .stop-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.5rem;
+        }
+
+        .stop-number {
+            background: var(--accent);
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .stop-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+            flex: 1;
+            margin-left: 0.75rem;
+        }
+
+        .stop-price {
+            font-weight: 700;
+            color: var(--success);
+            font-size: 1.1rem;
+        }
+
+        .stop-details {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-left: 2rem;
+        }
+
+        .stop-details span {
+            display: block;
+            margin-top: 0.25rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-muted);
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .loading {
+            display: none;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-muted);
+        }
+
+        .loading.active {
+            display: flex;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 900px) {
+            .main-content {
+                flex-direction: column;
+                height: auto;
+            }
+
+            #map {
+                height: 50vh;
+            }
+
+            .sidebar {
+                width: 100%;
+                border-left: none;
+                border-top: 1px solid var(--border);
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>Trip Planner</h1>
+        <form id="planForm" class="controls">
+            <div class="input-group">
+                <label for="start">Start Location</label>
+                <input type="text" id="start" name="start" placeholder="e.g. Miami, FL" required>
+            </div>
+            <div class="input-group">
+                <label for="end">End Location</label>
+                <input type="text" id="end" name="end" placeholder="e.g. Austin, TX" required>
+            </div>
+            <button type="submit" id="submitBtn">Plan Trip</button>
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <span>Planning route...</span>
+            </div>
+        </form>
+    </header>
+
+    <div class="main-content">
+        <div id="map"></div>
+        <aside class="sidebar" id="sidebar">
+            <div id="errorBox" class="error-message" style="display: none;"></div>
+            
+            <div id="results" style="display: none;">
+                <div class="summary">
+                    <div class="stat-card">
+                        <div class="label">Distance</div>
+                        <div class="value" id="distanceValue">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Fuel Needed</div>
+                        <div class="value" id="gallonsValue">--</div>
+                    </div>
+                    <div class="stat-card" style="grid-column: span 2;">
+                        <div class="label">Estimated Fuel Cost</div>
+                        <div class="value accent" id="costValue">--</div>
+                    </div>
+                </div>
+
+                <div class="stops-header">Fuel Stops (<span id="stopsCount">0</span>)</div>
+                <div id="stopsList"></div>
+            </div>
+
+            <div id="emptyState" class="empty-state">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                <p>Enter start and end locations to plan your trip</p>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        // Initialize map centered on US
+        const map = L.map('map').setView([39.8283, -98.5795], 4);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        let routeLayer = null;
+        let markersLayer = L.layerGroup().addTo(map);
+
+        // Polyline decoder (using mapbox polyline library loaded via CDN)
+        function decodePolyline(encoded) {
+            // The polyline library exposes itself as `polyline`
+            return polyline.decode(encoded);
+        }
+
+        // Format number with commas
+        function formatNumber(num) {
+            return num.toLocaleString('en-US', { maximumFractionDigits: 1 });
+        }
+
+        // Clear map layers
+        function clearMap() {
+            if (routeLayer) {
+                map.removeLayer(routeLayer);
+                routeLayer = null;
+            }
+            markersLayer.clearLayers();
+        }
+
+        // Render route on map
+        function renderRoute(geometryPolyline, stops) {
+            clearMap();
+
+            // Decode and draw polyline
+            const coords = decodePolyline(geometryPolyline);
+            if (coords.length > 0) {
+                routeLayer = L.polyline(coords, {
+                    color: '#e94560',
+                    weight: 4,
+                    opacity: 0.8
+                }).addTo(map);
+
+                // Fit map to route
+                map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
+
+                // Add start marker
+                const startMarker = L.marker(coords[0], {
+                    icon: L.divIcon({
+                        className: 'start-marker',
+                        html: `<div style="
+                            background: #48bb78;
+                            color: white;
+                            width: 32px;
+                            height: 32px;
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-weight: bold;
+                            font-size: 14px;
+                            border: 3px solid white;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+                        ">A</div>`,
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 16]
+                    })
+                });
+                startMarker.bindPopup('<strong>Start</strong>');
+                markersLayer.addLayer(startMarker);
+
+                // Add end marker
+                const endMarker = L.marker(coords[coords.length - 1], {
+                    icon: L.divIcon({
+                        className: 'end-marker',
+                        html: `<div style="
+                            background: #805ad5;
+                            color: white;
+                            width: 32px;
+                            height: 32px;
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-weight: bold;
+                            font-size: 14px;
+                            border: 3px solid white;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+                        ">B</div>`,
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 16]
+                    })
+                });
+                endMarker.bindPopup('<strong>Destination</strong>');
+                markersLayer.addLayer(endMarker);
+            }
+
+            // Add markers for stops
+            stops.forEach((stop, index) => {
+                if (stop.lat && stop.lng) {
+                    const marker = L.marker([stop.lat, stop.lng], {
+                        icon: L.divIcon({
+                            className: 'stop-marker',
+                            html: `<div style="
+                                background: #e94560;
+                                color: white;
+                                width: 28px;
+                                height: 28px;
+                                border-radius: 50%;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-weight: bold;
+                                font-size: 12px;
+                                border: 2px solid white;
+                                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                            ">${stop.sequence}</div>`,
+                            iconSize: [28, 28],
+                            iconAnchor: [14, 14]
+                        })
+                    });
+
+                    marker.bindPopup(`
+                        <div style="font-family: system-ui; min-width: 180px;">
+                            <strong style="font-size: 14px;">${stop.name}</strong><br>
+                            <span style="color: #666;">${stop.city}, ${stop.state}</span><br>
+                            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee;">
+                                <span style="color: #48bb78; font-weight: bold; font-size: 16px;">$${stop.price_per_gallon.toFixed(3)}/gal</span><br>
+                                <span style="color: #888; font-size: 12px;">Mile ${formatNumber(stop.at_route_mile)}</span>
+                            </div>
+                        </div>
+                    `);
+
+                    markersLayer.addLayer(marker);
+                }
+            });
+        }
+
+        // Render stops list in sidebar
+        function renderStops(stops) {
+            const stopsList = document.getElementById('stopsList');
+            
+            if (stops.length === 0) {
+                stopsList.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 1rem;">No fuel stops needed for this trip</p>';
+                return;
+            }
+
+            stopsList.innerHTML = stops.map(stop => `
+                <div class="stop-card">
+                    <div class="stop-header">
+                        <div class="stop-number">${stop.sequence}</div>
+                        <div class="stop-name">${stop.name}</div>
+                        <div class="stop-price">$${stop.price_per_gallon.toFixed(3)}</div>
+                    </div>
+                    <div class="stop-details">
+                        <span>${stop.address}</span>
+                        <span>${stop.city}, ${stop.state}</span>
+                        <span>Mile ${formatNumber(stop.at_route_mile)}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Show error
+        function showError(message) {
+            const errorBox = document.getElementById('errorBox');
+            errorBox.textContent = message;
+            errorBox.style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('emptyState').style.display = 'none';
+        }
+
+        // Show results
+        function showResults(data) {
+            document.getElementById('errorBox').style.display = 'none';
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('results').style.display = 'block';
+
+            // Update summary stats
+            document.getElementById('distanceValue').textContent = 
+                formatNumber(data.route.distance_miles) + ' mi';
+            document.getElementById('gallonsValue').textContent = 
+                formatNumber(data.totals.fuel_gallons) + ' gal';
+            document.getElementById('costValue').textContent = 
+                data.totals.estimated_cost_usd !== null 
+                    ? '$' + data.totals.estimated_cost_usd.toFixed(2)
+                    : 'N/A';
+            document.getElementById('stopsCount').textContent = data.stops.length;
+
+            // Render stops list
+            renderStops(data.stops);
+
+            // Render on map
+            renderRoute(data.route.geometry_polyline, data.stops);
+        }
+
+        // Form submit handler
+        document.getElementById('planForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const start = document.getElementById('start').value.trim();
+            const end = document.getElementById('end').value.trim();
+
+            if (!start || !end) {
+                showError('Please enter both start and end locations');
+                return;
+            }
+
+            const submitBtn = document.getElementById('submitBtn');
+            const loading = document.getElementById('loading');
+
+            submitBtn.disabled = true;
+            loading.classList.add('active');
+            document.getElementById('errorBox').style.display = 'none';
+
+            try {
+                const response = await fetch('/api/plan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ start, end })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    const errorMsg = data.error || data.start?.[0] || data.end?.[0] || 'An error occurred';
+                    showError(errorMsg);
+                    return;
+                }
+
+                showResults(data);
+
+            } catch (err) {
+                showError('Network error: ' + err.message);
+            } finally {
+                submitBtn.disabled = false;
+                loading.classList.remove('active');
+            }
+        });
+    </script>
+</body>
+</html>
+
